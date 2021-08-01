@@ -1,0 +1,145 @@
+#!/bin/bash
+
+#TODO: Don't hard-code gedit and atril, use xdg-open.
+#But for some reason if I xdg-open and then ^C this script,
+#the applications that were opened close.
+
+readonly pdf_viewer='atril'
+readonly text_editor='gedit'
+
+readonly usage="Usage: $0 <pdf slides file>"
+
+preamble="\documentclass[a4paper,12pt]{article}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{siunitx}
+\sisetup{range-phrase=--}
+\usepackage{chemformula}
+\usepackage{enumerate}
+\usepackage{engord}
+
+\usepackage{fancyvrb}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern} %Makes \textasciitilde not raised.
+\usepackage{inconsolata} %A nice monospace font
+\newcommand\textasciicaret{\textasciicircum}
+
+\newcommand\percent[1]{\SI{#1}{\percent}}
+
+\let\dotlessi\i %Copy the definition so we can safely redefine \i
+\newcommand\naive{na\\\"{\dotlessi}ve}
+\newcommand\Naive{Na\\\"{\dotlessi}ve}
+\renewcommand\bezier{B{\'e}zier}
+
+\newcommand\norm[1]{\left\lVert#1\right\rVert}
+\newcommand\abs[1]{\left\lvert#1\right\rvert}
+\renewcommand{\d}{\mathrm{d}}
+\newcommand{\D}[1]{\mathop{\d #1}}
+\renewcommand{\i}{\mathrm{i}}
+\newcommand{\e}{\mathrm{e}}
+\newcommand{\Imat}{\mathrm{I}}
+\newcommand{\bigO}{\mathcal{O}}
+\newcommand{\transpose}[1]{{#1}^{\mathrm{T}}}
+\newcommand\eval[2]{{\left.#1\right\rvert}_{#2}}
+
+%Have to delete existing commands first.
+\let\Re\relax
+\let\Im\relax
+\DeclareMathOperator{\Re}{Re}
+\DeclareMathOperator{\Im}{Im}
+\DeclareMathOperator{\trace}{tr}
+\DeclareMathOperator{\J}{J}
+
+\usepackage{nopageno}
+\usepackage{geometry}
+\def\MinimumPaperHeight{19cm}
+\geometry{paperheight=\maxdimen,margin=1in}
+
+\newbox\pagebox
+\newcommand\pagewrapper[1]{
+	\setbox\pagebox=\vbox{#1}
+	\usebox\pagebox
+	\pdfpageheight=\dimexpr\ht\pagebox+2in\relax
+	\ifdim\pdfpageheight<\MinimumPaperHeight
+		\pdfpageheight=\MinimumPaperHeight
+	\fi
+	\clearpage
+}
+
+\begin{document}"
+
+postamble="\end{document}"
+
+if [ "$#" -ne 1 ]; then
+	echo "$usage"
+	exit 1
+else
+	slides_file="$1"
+fi
+
+if [ ! -f "$slides_file" ]; then
+	echo "$slides_file does not exist or is not a regular file."
+	exit 1
+fi
+
+# ${VARIABLE%pattern} deletes shortest match of pattern from the end.
+# So this deletes the last slash and everything after it.
+slides_folder=${slides_file%/*}
+
+basename=$(basename "$slides_file" '.pdf')
+
+work_dir="$slides_folder/.$basename-notes"
+tex_file="$slides_folder/$basename-notes.tex"
+out_file="$slides_folder/$basename-notes.pdf"
+
+num_pages=$(pdftk "$slides_file" dump_data \
+	| grep NumberOfPages \
+	| awk '{print $2}')
+catlist=""
+for ((pg = 1; pg <= num_pages; pg++)); do
+	catlist="$catlist A$pg B$pg"
+done
+
+if [ ! -f "$tex_file" ]; then
+	echo "Will create $tex_file"
+	read -p "Is this okay? [y/n] " -r
+	if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+	
+	echo "$preamble" > "$tex_file"
+	for page_num in $(seq 1 "$num_pages"); do
+		echo "\pagewrapper{\section*{Slide $page_num}" >> "$tex_file"
+		echo '' >> "$tex_file"
+		echo '' >> "$tex_file"
+		echo '' >> "$tex_file"
+		echo '}' >> "$tex_file"
+	done
+	echo "$postamble" >> "$tex_file"
+else
+	echo "$tex_file already exists; I will use it."
+	read -p "Is this okay? [y/n] " -r
+	if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+fi
+
+if [ ! -d "$work_dir" ]; then
+	mkdir "$work_dir"
+fi
+
+$text_editor "$tex_file" & disown
+#disown makes the opened application a child of init
+#This keeps it running when this script gets terminated.
+
+function compile_and_build {
+	latexmk -output-directory="$work_dir" -jobname='notes' -pdf -halt-on-error "$tex_file"
+	pdftk A="$slides_file" B="$work_dir/notes.pdf" \
+		cat $catlist output "$out_file"
+}
+
+compile_and_build
+$pdf_viewer "$out_file" & disown
+
+while true; do
+	while inotifywait -q -e close_write "$tex_file"; do
+		compile_and_build
+	done
+done
