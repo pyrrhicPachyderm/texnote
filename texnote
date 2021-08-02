@@ -74,6 +74,21 @@ EOF
 
 postamble="\end{document}"
 
+function create_user_file {
+	user_file="$1"
+	num_pages="$2"
+	
+	echo "$preamble" > "$user_file"
+	for page_num in $(seq 1 "$num_pages"); do
+		echo "\pagewrapper{\section*{Slide $page_num}" >> "$user_file"
+		echo '' >> "$user_file"
+		echo '' >> "$user_file"
+		echo '' >> "$user_file"
+		echo '}' >> "$user_file"
+	done
+	echo "$postamble" >> "$user_file"
+}
+
 if [ "$#" -ne 1 ]; then
 	echo "$usage"
 	exit 1
@@ -103,34 +118,20 @@ work_dir="$slides_folder/.$basename-notes"
 tex_file="$slides_folder/$basename-notes.tex"
 out_file="$slides_folder/$basename-notes.pdf"
 
-num_pages=$(pdftk "$slides_file" dump_data \
+page_count=$(pdftk "$slides_file" dump_data \
 	| grep NumberOfPages \
 	| awk '{print $2}')
 catlist=""
-for ((pg = 1; pg <= num_pages; pg++)); do
+for ((pg = 1; pg <= page_count; pg++)); do
 	catlist="$catlist A$pg B$pg"
 done
-
-function create_user_file {
-	user_file="$1"
-	
-	echo "$preamble" > "$user_file"
-	for page_num in $(seq 1 "$num_pages"); do
-		echo "\pagewrapper{\section*{Slide $page_num}" >> "$user_file"
-		echo '' >> "$user_file"
-		echo '' >> "$user_file"
-		echo '' >> "$user_file"
-		echo '}' >> "$user_file"
-	done
-	echo "$postamble" >> "$user_file"
-}
 
 if [ ! -f "$tex_file" ]; then
 	echo "Will create $tex_file"
 	read -p "Is this okay? [y/n] " -r
 	if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
 	
-	create_user_file "$tex_file"
+	create_user_file "$tex_file" "$page_count"
 else
 	echo "$tex_file already exists; I will use it."
 	read -p "Is this okay? [y/n] " -r
