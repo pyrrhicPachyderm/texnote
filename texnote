@@ -86,6 +86,13 @@ if [ ! -f "$slides_file" ]; then
 	exit 1
 fi
 
+# ${VARIABLE%pattern} deletes longest match of pattern from the start.
+# So this deletes the last dot and everything before it, getting the extension.
+if [ ${slides_file##*.} != 'pdf' ]; then
+	echo "$slides_file is not a PDF file."
+	exit 1
+fi
+
 # ${VARIABLE%pattern} deletes shortest match of pattern from the end.
 # So this deletes the last slash and everything after it.
 slides_folder=${slides_file%/*}
