@@ -7,7 +7,7 @@
 readonly pdf_viewer='atril'
 readonly text_editor='gedit'
 
-readonly usage="Usage: $0 <pdf slides file>"
+readonly usage="Usage: $0 [-r] <pdf slides file>"
 
 function confirm {
 	message="$1"
@@ -97,6 +97,45 @@ function create_user_file {
 	echo "$postamble" >> "$user_file"
 }
 
+dedent_script=$(cat <<'EOF'
+from textwrap import dedent
+from sys import stdin
+import re
+
+chunk = ""
+
+for line in stdin:
+	#Included files will need dedenting, so their names will need changing.
+	line = re.sub("child=\"(.*).rnw\"", "child=\"\\1-dedented.rnw\"", line)
+	#knitr sometimes seems to struggle with tabs, so turn them to four spaces.
+	line = line.replace("\t", "    ")
+	#Chunks start with a line containing only <<something>>= or @
+	#Each can be followed by whitespace
+	if re.match("^<<.*>>= *$", dedent(line)) or re.match("^@ *$", dedent(line)):
+		print(dedent(chunk), end="")
+		chunk = ""
+		print(dedent(line), end="")
+	else:
+		chunk += line
+
+print(dedent(chunk), end="")
+EOF
+)
+
+use_sweave=0
+while getopts "r" opt; do
+	case $opt in
+		r)
+			use_sweave=1
+			;;
+		\?)
+			echo "Invalid option: -$OPTARG" >&2
+			exit 1
+			;;
+	esac
+done
+shift "$((OPTIND-1))" #Remove all the arguments parsed by getopts.
+
 if [ "$#" -ne 1 ]; then
 	echo "$usage"
 	exit 1
@@ -123,8 +162,10 @@ slides_folder=${slides_file%/*}
 basename=$(basename "$slides_file" '.pdf')
 
 work_dir="$slides_folder/.$basename-notes"
-user_tex_file="$slides_folder/$basename-notes.tex"
 out_file="$slides_folder/$basename-notes.pdf"
+
+user_tex_file="$slides_folder/$basename-notes.tex"
+user_rnw_file="$slides_folder/$basename-notes.rnw"
 
 page_count=$(pdftk "$slides_file" dump_data \
 	| grep NumberOfPages \
@@ -134,24 +175,44 @@ for ((pg = 1; pg <= page_count; pg++)); do
 	catlist="$catlist A$pg B$pg"
 done
 
-if [ ! -f "$user_tex_file" ]; then
-	confirm "Will create $user_tex_file"
-	
-	create_user_file "$user_tex_file" "$page_count"
+if [ -f "$user_rnw_file" ]; then
+	use_sweave=1
+fi
+
+if [ $use_sweave = 0 ]; then
+	user_file="$user_tex_file"
 else
-	confirm "$user_tex_file already exists; I will use it."
+	user_file="$user_rnw_file"
+fi
+
+if [ ! -f "$user_file" ]; then
+	confirm "Will create $user_file"
+	
+	create_user_file "$user_file" "$page_count"
+else
+	confirm "$user_file already exists; I will use it."
 fi
 
 if [ ! -d "$work_dir" ]; then
 	mkdir "$work_dir"
 fi
 
-$text_editor "$user_tex_file" & disown
+$text_editor "$user_file" & disown
 #disown makes the opened application a child of init
 #This keeps it running when this script gets terminated.
 
 function compile_and_build {
-	latexmk -output-directory="$work_dir" -jobname='notes' -pdf -halt-on-error "$user_tex_file"
+	if [ $use_sweave = 0 ]; then
+		tex_file="$user_tex_file"
+	else
+		dedented_rnw_file="$work_dir/$basename-notes-dedented.rnw"
+		tex_file="$work_dir/$basename-notes.tex"
+		
+		python3 -c "$dedent_script" < "$user_rnw_file" > "$dedented_rnw_file"
+		R -e "knitr::knit('$dedented_rnw_file','$tex_file')"
+	fi
+	
+	latexmk -output-directory="$work_dir" -jobname='notes' -pdf -halt-on-error "$tex_file"
 	pdftk A="$slides_file" B="$work_dir/notes.pdf" \
 		cat $catlist output "$out_file"
 }
@@ -160,7 +221,7 @@ compile_and_build
 $pdf_viewer "$out_file" & disown
 
 while true; do
-	while inotifywait -q -e close_write "$user_tex_file"; do
+	while inotifywait -q -e close_write "$user_file"; do
 		compile_and_build
 	done
 done
