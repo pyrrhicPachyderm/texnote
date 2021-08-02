@@ -27,7 +27,7 @@ preamble=$(cat <<'EOF'
 \usepackage{enumerate}
 \usepackage{engord}
 
-\usepackage{fancyvrb}
+\usepackage{cprotect}
 
 \usepackage[T1]{fontenc}
 \usepackage{lmodern} %Makes \textasciitilde not raised.
@@ -88,7 +88,7 @@ function create_user_file {
 	
 	echo "$preamble" > "$user_file"
 	for page_num in $(seq 1 "$num_pages"); do
-		echo "\pagewrapper{\section*{Slide $page_num}" >> "$user_file"
+		echo "\cprotect\pagewrapper{\section*{Slide $page_num}" >> "$user_file"
 		echo '' >> "$user_file"
 		echo '' >> "$user_file"
 		echo '' >> "$user_file"
