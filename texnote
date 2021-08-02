@@ -9,6 +9,14 @@ readonly text_editor='gedit'
 
 readonly usage="Usage: $0 <pdf slides file>"
 
+function confirm {
+	message="$1"
+	
+	echo "$message"
+	read -p "Is this okay? [y/n] " -r
+	if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+}
+
 preamble=$(cat <<'EOF'
 \documentclass[a4paper,12pt]{article}
 \usepackage{amssymb}
@@ -127,15 +135,11 @@ for ((pg = 1; pg <= page_count; pg++)); do
 done
 
 if [ ! -f "$user_tex_file" ]; then
-	echo "Will create $user_tex_file"
-	read -p "Is this okay? [y/n] " -r
-	if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+	confirm "Will create $user_tex_file"
 	
 	create_user_file "$user_tex_file" "$page_count"
 else
-	echo "$user_tex_file already exists; I will use it."
-	read -p "Is this okay? [y/n] " -r
-	if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+	confirm "$user_tex_file already exists; I will use it."
 fi
 
 if [ ! -d "$work_dir" ]; then
