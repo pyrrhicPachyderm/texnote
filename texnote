@@ -115,7 +115,7 @@ slides_folder=${slides_file%/*}
 basename=$(basename "$slides_file" '.pdf')
 
 work_dir="$slides_folder/.$basename-notes"
-tex_file="$slides_folder/$basename-notes.tex"
+user_tex_file="$slides_folder/$basename-notes.tex"
 out_file="$slides_folder/$basename-notes.pdf"
 
 page_count=$(pdftk "$slides_file" dump_data \
@@ -126,14 +126,14 @@ for ((pg = 1; pg <= page_count; pg++)); do
 	catlist="$catlist A$pg B$pg"
 done
 
-if [ ! -f "$tex_file" ]; then
-	echo "Will create $tex_file"
+if [ ! -f "$user_tex_file" ]; then
+	echo "Will create $user_tex_file"
 	read -p "Is this okay? [y/n] " -r
 	if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
 	
-	create_user_file "$tex_file" "$page_count"
+	create_user_file "$user_tex_file" "$page_count"
 else
-	echo "$tex_file already exists; I will use it."
+	echo "$user_tex_file already exists; I will use it."
 	read -p "Is this okay? [y/n] " -r
 	if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
 fi
@@ -142,12 +142,12 @@ if [ ! -d "$work_dir" ]; then
 	mkdir "$work_dir"
 fi
 
-$text_editor "$tex_file" & disown
+$text_editor "$user_tex_file" & disown
 #disown makes the opened application a child of init
 #This keeps it running when this script gets terminated.
 
 function compile_and_build {
-	latexmk -output-directory="$work_dir" -jobname='notes' -pdf -halt-on-error "$tex_file"
+	latexmk -output-directory="$work_dir" -jobname='notes' -pdf -halt-on-error "$user_tex_file"
 	pdftk A="$slides_file" B="$work_dir/notes.pdf" \
 		cat $catlist output "$out_file"
 }
@@ -156,7 +156,7 @@ compile_and_build
 $pdf_viewer "$out_file" & disown
 
 while true; do
-	while inotifywait -q -e close_write "$tex_file"; do
+	while inotifywait -q -e close_write "$user_tex_file"; do
 		compile_and_build
 	done
 done
