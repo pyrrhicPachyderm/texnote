@@ -111,20 +111,26 @@ for ((pg = 1; pg <= num_pages; pg++)); do
 	catlist="$catlist A$pg B$pg"
 done
 
+function create_user_file {
+	user_file="$1"
+	
+	echo "$preamble" > "$user_file"
+	for page_num in $(seq 1 "$num_pages"); do
+		echo "\pagewrapper{\section*{Slide $page_num}" >> "$user_file"
+		echo '' >> "$user_file"
+		echo '' >> "$user_file"
+		echo '' >> "$user_file"
+		echo '}' >> "$user_file"
+	done
+	echo "$postamble" >> "$user_file"
+}
+
 if [ ! -f "$tex_file" ]; then
 	echo "Will create $tex_file"
 	read -p "Is this okay? [y/n] " -r
 	if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
 	
-	echo "$preamble" > "$tex_file"
-	for page_num in $(seq 1 "$num_pages"); do
-		echo "\pagewrapper{\section*{Slide $page_num}" >> "$tex_file"
-		echo '' >> "$tex_file"
-		echo '' >> "$tex_file"
-		echo '' >> "$tex_file"
-		echo '}' >> "$tex_file"
-	done
-	echo "$postamble" >> "$tex_file"
+	create_user_file "$tex_file"
 else
 	echo "$tex_file already exists; I will use it."
 	read -p "Is this okay? [y/n] " -r
