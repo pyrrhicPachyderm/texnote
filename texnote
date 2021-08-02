@@ -9,7 +9,8 @@ readonly text_editor='gedit'
 
 readonly usage="Usage: $0 <pdf slides file>"
 
-preamble="\documentclass[a4paper,12pt]{article}
+preamble=$(cat <<'EOF'
+\documentclass[a4paper,12pt]{article}
 \usepackage{amssymb}
 \usepackage{amsmath}
 \usepackage{siunitx}
@@ -28,8 +29,8 @@ preamble="\documentclass[a4paper,12pt]{article}
 \newcommand\percent[1]{\SI{#1}{\percent}}
 
 \let\dotlessi\i %Copy the definition so we can safely redefine \i
-\newcommand\naive{na\\\"{\dotlessi}ve}
-\newcommand\Naive{Na\\\"{\dotlessi}ve}
+\newcommand\naive{na\"{\dotlessi}ve}
+\newcommand\Naive{Na\"{\dotlessi}ve}
 \renewcommand\bezier{B{\'e}zier}
 
 \newcommand\norm[1]{\left\lVert#1\right\rVert}
@@ -67,7 +68,9 @@ preamble="\documentclass[a4paper,12pt]{article}
 	\clearpage
 }
 
-\begin{document}"
+\begin{document}
+EOF
+)
 
 postamble="\end{document}"
 
